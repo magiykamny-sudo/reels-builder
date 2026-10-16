@@ -1,0 +1,49 @@
+name: Build reel
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_url:
+        description: Ссылка на фото
+        required: true
+      hook:
+        description: Хук, короткий текст на видео
+        required: true
+      tag:
+        description: Уникальное имя релиза, например reel-2026-10-17
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_URL: ${{ inputs.image_url }}
+      HOOK: ${{ inputs.hook }}
+      TAG: ${{ inputs.tag }}
+      MAKE_WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ffmpeg and fonts
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+
+      - name: Build reel
+        run: bash build_reel.sh "$IMAGE_URL" "$HOOK" reel.mp4
+
+      - name: Publish video as a release
+        run: |
+          gh release create "$TAG" reel.mp4 --title "$TAG" --notes "Автоматическая сборка рилса"
+          echo "VIDEO_URL=https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/reel.mp4" >> "$GITHUB_ENV"
+
+      - name: Notify Make
+        if: env.MAKE_WEBHOOK_URL != ''
+        run: |
+          curl -fsS -X POST -H 'Content-Type: application/json' \
+            -d "{\"video_url\": \"${VIDEO_URL}\", \"tag\": \"${TAG}\"}" \
+            "$MAKE_WEBHOOK_URL"
