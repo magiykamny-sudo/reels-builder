@@ -9,6 +9,10 @@ on:
       hook:
         description: Хук, короткий текст на видео
         required: true
+      body:
+        description: Текст поста для подписи, одной строкой
+        required: false
+        default: ''
       tag:
         description: Уникальное имя релиза, например reel-2026-10-17
         required: true
@@ -22,6 +26,7 @@ jobs:
     env:
       IMAGE_URL: ${{ inputs.image_url }}
       HOOK: ${{ inputs.hook }}
+      BODY: ${{ inputs.body }}
       TAG: ${{ inputs.tag }}
       MAKE_WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
       GH_TOKEN: ${{ github.token }}
@@ -44,6 +49,6 @@ jobs:
       - name: Notify Make
         if: env.MAKE_WEBHOOK_URL != ''
         run: |
-          curl -fsS -X POST -H 'Content-Type: application/json' \
-            -d "{\"video_url\": \"${VIDEO_URL}\", \"tag\": \"${TAG}\"}" \
-            "$MAKE_WEBHOOK_URL"
+          jq -n --arg video_url "$VIDEO_URL" --arg tag "$TAG" --arg hook "$HOOK" --arg body "$BODY" \
+            '{video_url:$video_url, tag:$tag, hook:$hook, body:$body}' \
+          | curl -fsS -X POST -H 'Content-Type: application/json' --data-binary @- "$MAKE_WEBHOOK_URL"

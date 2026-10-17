@@ -66,7 +66,7 @@ if [[ -f "$MUSIC" ]]; then
   AUDIO_IN=(-stream_loop -1 -i "$MUSIC")
   AUDIO_FILTER="[2:a]atrim=0:${DUR},afade=t=in:d=1,afade=t=out:st=$((DUR-2)):d=2,volume=0.8[a]"
 else
-  AUDIO_IN=(-f lavfi -i "anullsrc=r=44100:cl=stereo")
+  AUDIO_IN=(-f lavfi -i "anullsrc=r=48000:cl=stereo")
   AUDIO_FILTER="[2:a]atrim=0:${DUR}[a]"
 fi
 
@@ -96,7 +96,7 @@ ffmpeg -y -hide_banner -loglevel error \
   " \
   -map "[v]" -map "[a]" -t "$DUR" \
   -c:v libx264 -profile:v high -pix_fmt yuv420p -crf 28 -maxrate 2200k -bufsize 4400k -preset medium \
-  -c:a aac -b:a 128k -movflags +faststart \
+  -c:a aac -b:a 128k -ar 48000 -ac 2 -g 60 -keyint_min 60 -movflags +faststart \
   "$OUT"
 
 echo "Готово: $OUT"
