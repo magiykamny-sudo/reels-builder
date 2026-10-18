@@ -2,9 +2,9 @@
 # Сборка вертикального рилса 1080x1920 из одного фото.
 # Использование: build_reel.sh <фото: путь или ссылка> "<хук>" [выходной_файл.mp4]
 #
-# Что получается (15 секунд):
-#   0-11 с   фото с плавным наездом, логотип сверху, хук крупным текстом
-#   11-15 с  финальная заставка с названием, ценой, сайтом и телефоном
+# Что получается (20 секунд):
+#   0-16 с   фото с плавным наездом, логотип сверху, хук крупным текстом
+#   16-20 с  финальная заставка с названием, ценой, сайтом и телефоном
 # Музыка: если лежит файл assets/music.mp3, он подставляется под ролик.
 # Без него в ролике тихая звуковая дорожка (так видео принимают все площадки).
 set -euo pipefail
@@ -21,8 +21,8 @@ PRICE="Цены от 25 000 ₽"
 SITE="monuments76.ru"
 PHONE="+7 (915) 988-01-40"
 
-DUR=15
-SPLIT=11
+DUR=20
+SPLIT=16
 FPS=30
 FONT_BOLD="${FONT_BOLD:-/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf}"
 FONT_REG="${FONT_REG:-/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf}"
@@ -79,7 +79,7 @@ ffmpeg -y -hide_banner -loglevel error \
   -i "$IMG" -i "$LOGO" "${AUDIO_IN[@]}" \
   -filter_complex "
     [0:v]scale=1620:2880:force_original_aspect_ratio=increase,crop=1620:2880,
-         zoompan=z='min(1+0.0004*on,1.18)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${FRAMES}:s=1080x1920:fps=${FPS},
+         zoompan=z='min(1+0.0003*on,1.18)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${FRAMES}:s=1080x1920:fps=${FPS},
          format=yuv420p,
          drawbox=x=0:y=0:w=iw:h=ih:color=black@0.28:t=fill[bg];
     [1:v]scale=240:-1[logo];
