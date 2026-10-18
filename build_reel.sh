@@ -3,7 +3,7 @@
 # Использование: build_reel.sh <фото: путь или ссылка> "<хук>" [выходной_файл.mp4]
 #
 # Что получается (20 секунд):
-#   0-16 с   фото с плавным наездом, логотип сверху, хук крупным текстом
+#   0-16 с   фото с плавным наездом, логотип в левом верхнем углу, хук крупным текстом
 #   16-20 с  финальная заставка с названием, ценой, сайтом и телефоном
 # Музыка: если лежит файл assets/music.mp3, он подставляется под ролик.
 # Без него в ролике тихая звуковая дорожка (так видео принимают все площадки).
@@ -71,7 +71,7 @@ else
 fi
 
 FRAMES=$((DUR * FPS))
-T="fontfile=${FONT_BOLD}:fontcolor=white"
+T="fontfile=${FONT_BOLD}:fontcolor=white:text_align=center"
 E="enable='between(t,${SPLIT},${DUR})'"
 
 # 4. Сборка.
@@ -82,8 +82,8 @@ ffmpeg -y -hide_banner -loglevel error \
          zoompan=z='min(1+0.0003*on,1.18)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${FRAMES}:s=1080x1920:fps=${FPS},
          format=yuv420p,
          drawbox=x=0:y=0:w=iw:h=ih:color=black@0.28:t=fill[bg];
-    [1:v]scale=240:-1[logo];
-    [bg][logo]overlay=x=(W-w)/2:y=150[v1];
+    [1:v]scale=190:-1[logo];
+    [bg][logo]overlay=x=50:y=80[v1];
     [v1]drawtext=${T}:textfile=${WORK}/hook.txt:fontsize=76:line_spacing=14:box=1:boxcolor=black@0.55:boxborderw=36:x=(w-text_w)/2:y=(h-text_h)/2-60:enable='between(t,0.4,${SPLIT})',
         drawbox=x=0:y=0:w=iw:h=ih:color=0x8B1A1A@1.0:t=fill:${E},
         drawtext=${T}:textfile=${WORK}/brand.txt:fontsize=92:x=(w-text_w)/2:y=520:${E},
