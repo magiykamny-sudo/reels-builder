@@ -1,0 +1,21 @@
+name: Cleanup draft releases
+
+# Удаляет черновики релизов, которые остаются после пробных сборок (dry_run).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Delete draft releases
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[] | select(.draft) | .id' | while read -r id; do
+            echo "Удаляю черновик $id"
+            gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/$id"
+          done
