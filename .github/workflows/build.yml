@@ -46,17 +46,22 @@ jobs:
       - name: Build reel
         run: bash build_reel.sh "$IMAGE_URL" "$HOOK" reel.mp4
 
+      - name: Write release notes
+        run: |
+          # Описание релиза: хук и подпись отдельными строками, их читает автоматизация для Instagram, TikTok и YouTube.
+          printf 'Хук: %s\nПодпись: %s\n' "$HOOK" "$BODY" > notes.txt
+
       - name: Save test video as a private draft (dry run)
         if: env.DRY_RUN == 'true'
         run: |
           # Черновик релиза виден только владельцам репозитория, на публикацию и "последний релиз" не влияет.
-          gh release create "$TAG" reel.mp4 --title "$TAG" --notes "Пробная сборка" --draft
+          gh release create "$TAG" reel.mp4 --title "$TAG" --notes-file notes.txt --draft
 
       - name: Publish video as a release
         if: env.DRY_RUN != 'true'
         run: |
           # --latest: этот релиз всегда считается последним (иначе GitHub выбирает по дате коммита, а она у всех одна)
-          gh release create "$TAG" reel.mp4 --title "$TAG" --notes "Автоматическая сборка рилса" --latest
+          gh release create "$TAG" reel.mp4 --title "$TAG" --notes-file notes.txt --latest
           echo "VIDEO_URL=https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/reel.mp4" >> "$GITHUB_ENV"
 
       - name: Notify Make
