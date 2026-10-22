@@ -46,13 +46,11 @@ jobs:
       - name: Build reel
         run: bash build_reel.sh "$IMAGE_URL" "$HOOK" reel.mp4
 
-      - name: Save test video (dry run)
+      - name: Save test video as a private draft (dry run)
         if: env.DRY_RUN == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reel
-          path: reel.mp4
-          retention-days: 3
+        run: |
+          # Черновик релиза виден только владельцам репозитория, на публикацию и "последний релиз" не влияет.
+          gh release create "$TAG" reel.mp4 --title "$TAG" --notes "Пробная сборка" --draft
 
       - name: Publish video as a release
         if: env.DRY_RUN != 'true'
