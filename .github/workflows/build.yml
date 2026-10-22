@@ -16,6 +16,10 @@ on:
       tag:
         description: Уникальное имя релиза, например reel-2026-10-17
         required: true
+      dry_run:
+        description: Пробная сборка true, ролик только сохраняется как файл, без релиза и без публикации
+        required: false
+        default: 'false'
 
 permissions:
   contents: write
@@ -28,6 +32,7 @@ jobs:
       HOOK: ${{ inputs.hook }}
       BODY: ${{ inputs.body }}
       TAG: ${{ inputs.tag }}
+      DRY_RUN: ${{ inputs.dry_run }}
       MAKE_WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -41,13 +46,23 @@ jobs:
       - name: Build reel
         run: bash build_reel.sh "$IMAGE_URL" "$HOOK" reel.mp4
 
+      - name: Save test video (dry run)
+        if: env.DRY_RUN == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reel
+          path: reel.mp4
+          retention-days: 3
+
       - name: Publish video as a release
+        if: env.DRY_RUN != 'true'
         run: |
-          gh release create "$TAG" reel.mp4 --title "$TAG" --notes "Автоматическая сборка рилса"
+          # --latest: этот релиз всегда считается последним (иначе GitHub выбирает по дате коммита, а она у всех одна)
+          gh release create "$TAG" reel.mp4 --title "$TAG" --notes "Автоматическая сборка рилса" --latest
           echo "VIDEO_URL=https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/reel.mp4" >> "$GITHUB_ENV"
 
       - name: Notify Make
-        if: env.MAKE_WEBHOOK_URL != ''
+        if: env.MAKE_WEBHOOK_URL != '' && env.DRY_RUN != 'true'
         run: |
           jq -n --arg video_url "$VIDEO_URL" --arg tag "$TAG" --arg hook "$HOOK" --arg body "$BODY" \
             '{video_url:$video_url, tag:$tag, hook:$hook, body:$body}' \
