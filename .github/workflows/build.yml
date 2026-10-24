@@ -16,6 +16,14 @@ on:
       tag:
         description: Уникальное имя релиза, например reel-2026-10-17
         required: true
+      hook_en:
+        description: Хук по-английски, строка под русским хуком (необязательно)
+        required: false
+        default: ''
+      body_en:
+        description: Подпись по-английски (необязательно)
+        required: false
+        default: ''
       dry_run:
         description: Пробная сборка true, ролик только сохраняется как файл, без релиза и без публикации
         required: false
@@ -31,6 +39,8 @@ jobs:
       IMAGE_URL: ${{ inputs.image_url }}
       HOOK: ${{ inputs.hook }}
       BODY: ${{ inputs.body }}
+      HOOK_EN: ${{ inputs.hook_en }}
+      BODY_EN: ${{ inputs.body_en }}
       TAG: ${{ inputs.tag }}
       DRY_RUN: ${{ inputs.dry_run }}
       MAKE_WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
@@ -49,7 +59,7 @@ jobs:
       - name: Write release notes
         run: |
           # Описание релиза: хук и подпись отдельными строками, их читает автоматизация для Instagram, TikTok и YouTube.
-          printf 'Хук: %s\nПодпись: %s\n' "$HOOK" "$BODY" > notes.txt
+          printf 'Хук: %s\nПодпись: %s\nHook EN: %s\nCaption EN: %s\n' "$HOOK" "$BODY" "$HOOK_EN" "$BODY_EN" > notes.txt
 
       - name: Save test video as a private draft (dry run)
         if: env.DRY_RUN == 'true'
@@ -68,5 +78,6 @@ jobs:
         if: env.MAKE_WEBHOOK_URL != '' && env.DRY_RUN != 'true'
         run: |
           jq -n --arg video_url "$VIDEO_URL" --arg tag "$TAG" --arg hook "$HOOK" --arg body "$BODY" \
-            '{video_url:$video_url, tag:$tag, hook:$hook, body:$body}' \
+                --arg hook_en "$HOOK_EN" --arg body_en "$BODY_EN" \
+            '{video_url:$video_url, tag:$tag, hook:$hook, body:$body, hook_en:$hook_en, body_en:$body_en}' \
           | curl -fsS -X POST -H 'Content-Type: application/json' --data-binary @- "$MAKE_WEBHOOK_URL"

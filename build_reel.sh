@@ -13,6 +13,8 @@ set -euo pipefail
 
 IMGS_RAW="${1:?нужна ссылка или путь хотя бы к одному фото}"
 HOOK="${2:?нужен текст хука}"
+# Английская строка под хуком (необязательно): передаётся переменной HOOK_EN.
+HOOK_EN="${HOOK_EN:-}"
 OUT="${3:-reel.mp4}"
 
 # Эти строки можно менять без правки остального кода.
@@ -54,7 +56,7 @@ N=${#IMGS[@]}
 [[ $N -ge 1 ]] || { echo "Ни одного фото не удалось получить" >&2; exit 1; }
 
 # 2. Тексты: убрать длинное и среднее тире, перенести строки под ширину кадра.
-export HOOK BRAND TAGLINE SINCE PRICE SITE PHONE WORK
+export HOOK HOOK_EN BRAND TAGLINE SINCE PRICE SITE PHONE WORK
 python3 - <<'PY'
 import os, textwrap
 
@@ -67,6 +69,17 @@ def put(name, text, width):
         f.write("\n".join(lines))
 
 put("hook.txt", os.environ["HOOK"], 17)
+
+# Английская строка идёт отдельной плашкой под русским хуком.
+# Положение считаем по числу строк русского хука (высота строки шрифта 76 пт около 89 px + 14 px интервал).
+hook_lines = len(textwrap.wrap(clean(os.environ["HOOK"]), width=17)) or 1
+en = clean(os.environ.get("HOOK_EN", ""))
+if en:
+    put("hook_en.txt", en, 26)
+    block_h = hook_lines * 89 + (hook_lines - 1) * 14
+    ru_box_bottom = 960 - 60 + block_h / 2 + 36
+    with open(os.path.join(os.environ["WORK"], "layout.env"), "w") as f:
+        f.write("EN_Y=%d\n" % int(ru_box_bottom + 18 + 22))
 put("brand.txt", os.environ["BRAND"], 20)
 put("tagline.txt", os.environ["TAGLINE"], 20)
 put("since.txt", os.environ["SINCE"], 30)
@@ -127,6 +140,12 @@ FILTER+="[chain]vignette=angle=PI/5,drawbox=x=0:y=0:w=iw:h=ih:color=black@0.22:t
 FILTER+="[${LOGO_IDX}:v]scale=190:-1[logo];"
 FILTER+="[bg][logo]overlay=x=50:y=${LOGO_Y}[v1];"
 FILTER+="[v1]drawtext=${T}:textfile=${WORK}/hook.txt:fontsize=76:line_spacing=14:box=1:boxcolor=black@0.55:boxborderw=36:x=(w-text_w)/2:${HOOK_ANIM}:enable='between(t,0.4,${SPLIT})',"
+if [[ -f "$WORK/hook_en.txt" ]]; then
+  # shellcheck disable=SC1090
+  source "$WORK/layout.env"
+  EN_ANIM="y=${EN_Y}+160*pow(max(0\,1-(t-0.55)/0.6)\,2):alpha='min(1\,max(0\,(t-0.55)/0.4))'"
+  FILTER+="drawtext=${T}:fontcolor=0xE6E6E6:textfile=${WORK}/hook_en.txt:fontsize=48:line_spacing=10:box=1:boxcolor=black@0.55:boxborderw=22:x=(w-text_w)/2:${EN_ANIM}:enable='between(t,0.55,${SPLIT})',"
+fi
 FILTER+="drawbox=x=0:y=0:w=iw:h=ih:color=0x8B1A1A@1.0:t=fill:${E},"
 FILTER+="drawtext=${T}:textfile=${WORK}/brand.txt:fontsize=92:x=(w-text_w)/2:y=520:${E},"
 FILTER+="drawtext=${T}:textfile=${WORK}/tagline.txt:fontsize=56:line_spacing=12:x=(w-text_w)/2:y=700:${E},"
