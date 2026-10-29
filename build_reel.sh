@@ -16,8 +16,9 @@ HOOK="${2:?нужен текст хука}"
 # Английская строка под хуком (необязательно): передаётся переменной HOOK_EN.
 HOOK_EN="${HOOK_EN:-}"
 # Ответ на вопрос (необязательно): до трёх коротких пунктов через "/", переменная ANSWER.
-# Если он задан, вопрос висит 5 секунд, затем пункты с цифрами появляются по очереди.
+# Если он задан, вопрос висит 4,2 секунды, затем пункты ответа идут по одному (3,8 / 3,2 / 3,9 секунды).
 ANSWER="${ANSWER:-}"
+ANSWER_EN="${ANSWER_EN:-}"   # те же пункты по-английски, тоже через "/"
 OUT="${3:-reel.mp4}"
 
 # Эти строки можно менять без правки остального кода.
@@ -59,7 +60,7 @@ N=${#IMGS[@]}
 [[ $N -ge 1 ]] || { echo "Ни одного фото не удалось получить" >&2; exit 1; }
 
 # 2. Тексты: убрать длинное и среднее тире, перенести строки под ширину кадра.
-export HOOK HOOK_EN ANSWER BRAND TAGLINE SINCE PRICE SITE PHONE WORK
+export HOOK HOOK_EN ANSWER ANSWER_EN BRAND TAGLINE SINCE PRICE SITE PHONE WORK
 python3 - <<'PY'
 import os, textwrap
 
@@ -87,13 +88,16 @@ if en:
     layout["EN_Y"] = int(ru_box_bottom + 18 + 22)
 
 # Ответ: пункты разделены "/", берём первые три. Каждый пункт показывается один, как хук (строки по 17 знаков, шрифт 76).
+# Английская строка (если есть) стоит под пунктом так же, как под хуком.
 pts = [clean(x) for x in os.environ.get("ANSWER", "").split("/") if clean(x)][:3]
+pts_en = [clean(x) for x in os.environ.get("ANSWER_EN", "").split("/") if clean(x)][:3]
 layout["N_ANS"] = len(pts)
 for i, pt in enumerate(pts, 1):
     n = put("ans%d.txt" % i, pt, 17)
-    h = n * 89 + (n - 1) * 14
-    # центр красной метки: над плашкой текста (плашка по центру кадра, как у хука)
-    layout["BADGE_Y%d" % i] = int(900 - h / 2 - 36 - 125)
+    if i <= len(pts_en):
+        put("ans_en%d.txt" % i, pts_en[i - 1], 26)
+        block_h = n * 89 + (n - 1) * 14
+        layout["ANS_EN_Y%d" % i] = int(960 - 60 + block_h / 2 + 36 + 18 + 22)
 with open(os.path.join(os.environ["WORK"], "layout.env"), "w") as f:
     for k, v in layout.items():
         f.write("%s=%d\n" % (k, v))
@@ -110,7 +114,7 @@ source "$WORK/layout.env"
 HOOK_END=$SPLIT
 HOOK_FADE=""
 if [[ ${N_ANS:-0} -gt 0 ]]; then
-  HOOK_END=5      # вопрос уходит на 5-й секунде, дальше идёт ответ
+  HOOK_END=4.2    # вопрос уходит быстро, дальше идёт ответ
   HOOK_FADE="*min(1\,max(0\,(${HOOK_END}-t)/0.3))"
 fi
 
@@ -170,23 +174,21 @@ if [[ -f "$WORK/hook_en.txt" ]]; then
   EN_ANIM="y=${EN_Y}+160*pow(max(0\,1-(t-0.55)/0.6)\,2):alpha='min(1\,max(0\,(t-0.55)/0.4))${HOOK_FADE}'"
   FILTER+="drawtext=${T}:fontcolor=0xE6E6E6:textfile=${WORK}/hook_en.txt:fontsize=48:line_spacing=10:box=1:boxcolor=black@0.55:boxborderw=22:x=(w-text_w)/2:${EN_ANIM}:enable='between(t,0.55,${HOOK_END})',"
 fi
-# Пункты ответа по одному. Сначала пульсирует красная метка с цифрой (зритель понимает, что идёт ответ),
-# через 0,7 с появляется текст. Пункты идут в 5,0 / 8,6 / 12,2 секунд, последний держится до заставки.
+# Пункты ответа по одному: вопрос быстрый, ответ держится дольше.
+# Окна показа: 4,3-8,1 / 8,3-11,5 / 11,7-15,6 секунды (потом заставка с 16-й).
 if [[ ${N_ANS:-0} -gt 0 ]]; then
+  AS=(4.3 8.3 11.7)
+  AE=(8.1 11.5 15.6)
   for ((k=1; k<=N_ANS; k++)); do
-    S=$(awk -v k="$k" 'BEGIN{printf "%.2f", 5+3.6*(k-1)}')
-    TS=$(awk -v s="$S" 'BEGIN{printf "%.2f", s+0.7}')
-    if [[ $k -lt $N_ANS ]]; then TE=$(awk -v s="$S" 'BEGIN{printf "%.2f", s+3.4}'); else TE=15.6; fi
-    bv="BADGE_Y$k"; BY=${!bv}
-    BA="alpha='min(1\,max(0\,(t-${S})/0.25))*min(1\,max(0\,(${TE}-t)/0.2))'"
-    TA="alpha='min(1\,max(0\,(t-${TS})/0.35))*min(1\,max(0\,(${TE}-t)/0.2))'"
-    BE="enable='between(t,${S},${TE})'"
-    TE_EN="enable='between(t,${TS},${TE})'"
-    # метка слегка пульсирует, пока текста ещё нет
-    FS="fontsize='180+if(lt(t\,${TS})\,20*sin(2*PI*2.5*(t-${S}))\,0)'"
-    FILTER+="drawtext=fontfile=${FONT_BOLD}:fontcolor=0xC62828:text='●':${FS}:x=(w-text_w)/2:y=${BY}-text_h/2+${ANS_DOT_DY:-0}:${BA}:${BE},"
-    FILTER+="drawtext=fontfile=${FONT_BOLD}:fontcolor=white:text='${k}':fontsize=88:x=(w-text_w)/2:y=${BY}-text_h/2+${ANS_NUM_DY:-0}:${BA}:${BE},"
-    FILTER+="drawtext=${T}:textfile=${WORK}/ans${k}.txt:fontsize=76:line_spacing=14:box=1:boxcolor=black@0.55:boxborderw=36:x=(w-text_w)/2:y=(h-text_h)/2-60+60*pow(max(0\,1-(t-${TS})/0.45)\,2):${TA}:${TE_EN},"
+    S=${AS[$((k-1))]}; TE=${AE[$((k-1))]}
+    TA="alpha='min(1\,max(0\,(t-${S})/0.35))*min(1\,max(0\,(${TE}-t)/0.2))'"
+    TEN="alpha='min(1\,max(0\,(t-${S}-0.15)/0.35))*min(1\,max(0\,(${TE}-t)/0.2))'"
+    EN_WIN="enable='between(t,${S},${TE})'"
+    FILTER+="drawtext=${T}:textfile=${WORK}/ans${k}.txt:fontsize=76:line_spacing=14:box=1:boxcolor=black@0.55:boxborderw=36:x=(w-text_w)/2:y=(h-text_h)/2-60+60*pow(max(0\,1-(t-${S})/0.45)\,2):${TA}:${EN_WIN},"
+    if [[ -f "$WORK/ans_en${k}.txt" ]]; then
+      eyv="ANS_EN_Y$k"; EY=${!eyv}
+      FILTER+="drawtext=${T}:fontcolor=0xE6E6E6:textfile=${WORK}/ans_en${k}.txt:fontsize=48:line_spacing=10:box=1:boxcolor=black@0.55:boxborderw=22:x=(w-text_w)/2:y=${EY}+60*pow(max(0\,1-(t-${S}-0.15)/0.45)\,2):${TEN}:${EN_WIN},"
+    fi
   done
 fi
 FILTER+="drawbox=x=0:y=0:w=iw:h=ih:color=0x8B1A1A@1.0:t=fill:${E},"
