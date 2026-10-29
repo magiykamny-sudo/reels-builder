@@ -15,6 +15,9 @@ IMGS_RAW="${1:?нужна ссылка или путь хотя бы к одно
 HOOK="${2:?нужен текст хука}"
 # Английская строка под хуком (необязательно): передаётся переменной HOOK_EN.
 HOOK_EN="${HOOK_EN:-}"
+# Ответ на вопрос (необязательно): до трёх коротких пунктов через "/", переменная ANSWER.
+# Если он задан, вопрос висит 5 секунд, затем пункты с цифрами появляются по очереди.
+ANSWER="${ANSWER:-}"
 OUT="${3:-reel.mp4}"
 
 # Эти строки можно менять без правки остального кода.
@@ -56,7 +59,7 @@ N=${#IMGS[@]}
 [[ $N -ge 1 ]] || { echo "Ни одного фото не удалось получить" >&2; exit 1; }
 
 # 2. Тексты: убрать длинное и среднее тире, перенести строки под ширину кадра.
-export HOOK HOOK_EN BRAND TAGLINE SINCE PRICE SITE PHONE WORK
+export HOOK HOOK_EN ANSWER BRAND TAGLINE SINCE PRICE SITE PHONE WORK
 python3 - <<'PY'
 import os, textwrap
 
@@ -67,6 +70,9 @@ def put(name, text, width):
     lines = textwrap.wrap(clean(text), width=width) or [""]
     with open(os.path.join(os.environ["WORK"], name), "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
+    return len(lines)
+
+layout = {}
 
 put("hook.txt", os.environ["HOOK"], 17)
 
@@ -78,8 +84,25 @@ if en:
     put("hook_en.txt", en, 26)
     block_h = hook_lines * 89 + (hook_lines - 1) * 14
     ru_box_bottom = 960 - 60 + block_h / 2 + 36
-    with open(os.path.join(os.environ["WORK"], "layout.env"), "w") as f:
-        f.write("EN_Y=%d\n" % int(ru_box_bottom + 18 + 22))
+    layout["EN_Y"] = int(ru_box_bottom + 18 + 22)
+
+# Ответ: пункты разделены "/", берём первые три. Строки по 20 знаков, шрифт 60 (строка 71 px + 12 px интервал).
+pts = [clean(x) for x in os.environ.get("ANSWER", "").split("/") if clean(x)][:3]
+layout["N_ANS"] = len(pts)
+heights = []
+for i, pt in enumerate(pts, 1):
+    n = put("ans%d.txt" % i, pt, 20)
+    heights.append(n * 71 + (n - 1) * 12)
+GAP = 90
+if pts:
+    y = int(900 - (sum(heights) + GAP * (len(pts) - 1)) / 2)
+    for i, h in enumerate(heights, 1):
+        layout["ANS_Y%d" % i] = y
+        layout["ANS_H%d" % i] = h
+        y += h + GAP
+with open(os.path.join(os.environ["WORK"], "layout.env"), "w") as f:
+    for k, v in layout.items():
+        f.write("%s=%d\n" % (k, v))
 put("brand.txt", os.environ["BRAND"], 20)
 put("tagline.txt", os.environ["TAGLINE"], 20)
 put("since.txt", os.environ["SINCE"], 30)
@@ -87,6 +110,15 @@ put("price.txt", os.environ["PRICE"], 30)
 put("site.txt", os.environ["SITE"], 30)
 put("phone.txt", os.environ["PHONE"], 30)
 PY
+
+# shellcheck disable=SC1090
+source "$WORK/layout.env"
+HOOK_END=$SPLIT
+HOOK_FADE=""
+if [[ ${N_ANS:-0} -gt 0 ]]; then
+  HOOK_END=5      # вопрос уходит на 5-й секунде, дальше идёт ответ
+  HOOK_FADE="*min(1\,max(0\,(${HOOK_END}-t)/0.3))"
+fi
 
 # 3. Звук: музыка, если есть, иначе тишина.
 LOGO_IDX=$N
@@ -134,17 +166,28 @@ fi
 T="fontfile=${FONT_BOLD}:fontcolor=white:text_align=center"
 E="enable='between(t,${SPLIT},${DUR})'"
 # Хук выезжает снизу за полсекунды и плавно проявляется.
-HOOK_ANIM="y=(h-text_h)/2-60+160*pow(max(0\,1-(t-0.4)/0.6)\,2):alpha='min(1\,max(0\,(t-0.4)/0.4))'"
+HOOK_ANIM="y=(h-text_h)/2-60+160*pow(max(0\,1-(t-0.4)/0.6)\,2):alpha='min(1\,max(0\,(t-0.4)/0.4))${HOOK_FADE}'"
 
 FILTER+="[chain]vignette=angle=PI/5,drawbox=x=0:y=0:w=iw:h=ih:color=black@0.22:t=fill[bg];"
 FILTER+="[${LOGO_IDX}:v]scale=190:-1[logo];"
 FILTER+="[bg][logo]overlay=x=50:y=${LOGO_Y}[v1];"
-FILTER+="[v1]drawtext=${T}:textfile=${WORK}/hook.txt:fontsize=76:line_spacing=14:box=1:boxcolor=black@0.55:boxborderw=36:x=(w-text_w)/2:${HOOK_ANIM}:enable='between(t,0.4,${SPLIT})',"
+FILTER+="[v1]drawtext=${T}:textfile=${WORK}/hook.txt:fontsize=76:line_spacing=14:box=1:boxcolor=black@0.55:boxborderw=36:x=(w-text_w)/2:${HOOK_ANIM}:enable='between(t,0.4,${HOOK_END})',"
 if [[ -f "$WORK/hook_en.txt" ]]; then
-  # shellcheck disable=SC1090
-  source "$WORK/layout.env"
-  EN_ANIM="y=${EN_Y}+160*pow(max(0\,1-(t-0.55)/0.6)\,2):alpha='min(1\,max(0\,(t-0.55)/0.4))'"
-  FILTER+="drawtext=${T}:fontcolor=0xE6E6E6:textfile=${WORK}/hook_en.txt:fontsize=48:line_spacing=10:box=1:boxcolor=black@0.55:boxborderw=22:x=(w-text_w)/2:${EN_ANIM}:enable='between(t,0.55,${SPLIT})',"
+  EN_ANIM="y=${EN_Y}+160*pow(max(0\,1-(t-0.55)/0.6)\,2):alpha='min(1\,max(0\,(t-0.55)/0.4))${HOOK_FADE}'"
+  FILTER+="drawtext=${T}:fontcolor=0xE6E6E6:textfile=${WORK}/hook_en.txt:fontsize=48:line_spacing=10:box=1:boxcolor=black@0.55:boxborderw=22:x=(w-text_w)/2:${EN_ANIM}:enable='between(t,0.55,${HOOK_END})',"
+fi
+# Пункты ответа: красная метка с цифрой и текст, появляются в 6, 9 и 12 секунд, держатся до заставки.
+if [[ ${N_ANS:-0} -gt 0 ]]; then
+  for ((k=1; k<=N_ANS; k++)); do
+    T0=$(awk -v k="$k" 'BEGIN{printf "%.2f", 6+3*(k-1)}')
+    yv="ANS_Y$k"; hv="ANS_H$k"; Y=${!yv}; H=${!hv}
+    AA="alpha='min(1\,max(0\,(t-${T0})/0.35))'"
+    EW="enable='between(t,${T0},15.6)'"
+    SL="x=${ANS_TX:-200}+80*pow(max(0\,1-(t-${T0})/0.45)\,2)"
+    FILTER+="drawtext=fontfile=${FONT_BOLD}:fontcolor=white:textfile=${WORK}/ans${k}.txt:fontsize=60:line_spacing=12:box=1:boxcolor=black@0.55:boxborderw=24:${SL}:y=${Y}:${AA}:${EW},"
+    FILTER+="drawtext=fontfile=${FONT_BOLD}:fontcolor=0xC62828:text='●':fontsize=130:x=${ANS_BX:-60}:y=${Y}+${H}/2-text_h/2+${ANS_DOT_DY:-0}:${AA}:${EW},"
+    FILTER+="drawtext=fontfile=${FONT_BOLD}:fontcolor=white:text='${k}':fontsize=64:x=${ANS_BX:-60}+(${ANS_GW:-100}-text_w)/2:y=${Y}+${H}/2-text_h/2+${ANS_NUM_DY:-0}:${AA}:${EW},"
+  done
 fi
 FILTER+="drawbox=x=0:y=0:w=iw:h=ih:color=0x8B1A1A@1.0:t=fill:${E},"
 FILTER+="drawtext=${T}:textfile=${WORK}/brand.txt:fontsize=92:x=(w-text_w)/2:y=520:${E},"
