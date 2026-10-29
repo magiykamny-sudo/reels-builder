@@ -67,7 +67,7 @@ def clean(s):
     return s.replace("—", ",").replace("–", ",").replace("−", ",").strip()
 
 def put(name, text, width):
-    lines = textwrap.wrap(clean(text), width=width) or [""]
+    lines = textwrap.wrap(clean(text), width=width, break_on_hyphens=False) or [""]
     with open(os.path.join(os.environ["WORK"], name), "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
     return len(lines)
@@ -86,20 +86,14 @@ if en:
     ru_box_bottom = 960 - 60 + block_h / 2 + 36
     layout["EN_Y"] = int(ru_box_bottom + 18 + 22)
 
-# Ответ: пункты разделены "/", берём первые три. Строки по 20 знаков, шрифт 60 (строка 71 px + 12 px интервал).
+# Ответ: пункты разделены "/", берём первые три. Каждый пункт показывается один, как хук (строки по 17 знаков, шрифт 76).
 pts = [clean(x) for x in os.environ.get("ANSWER", "").split("/") if clean(x)][:3]
 layout["N_ANS"] = len(pts)
-heights = []
 for i, pt in enumerate(pts, 1):
-    n = put("ans%d.txt" % i, pt, 20)
-    heights.append(n * 71 + (n - 1) * 12)
-GAP = 90
-if pts:
-    y = int(900 - (sum(heights) + GAP * (len(pts) - 1)) / 2)
-    for i, h in enumerate(heights, 1):
-        layout["ANS_Y%d" % i] = y
-        layout["ANS_H%d" % i] = h
-        y += h + GAP
+    n = put("ans%d.txt" % i, pt, 17)
+    h = n * 89 + (n - 1) * 14
+    # центр красной метки: над плашкой текста (плашка по центру кадра, как у хука)
+    layout["BADGE_Y%d" % i] = int(900 - h / 2 - 36 - 125)
 with open(os.path.join(os.environ["WORK"], "layout.env"), "w") as f:
     for k, v in layout.items():
         f.write("%s=%d\n" % (k, v))
@@ -176,17 +170,23 @@ if [[ -f "$WORK/hook_en.txt" ]]; then
   EN_ANIM="y=${EN_Y}+160*pow(max(0\,1-(t-0.55)/0.6)\,2):alpha='min(1\,max(0\,(t-0.55)/0.4))${HOOK_FADE}'"
   FILTER+="drawtext=${T}:fontcolor=0xE6E6E6:textfile=${WORK}/hook_en.txt:fontsize=48:line_spacing=10:box=1:boxcolor=black@0.55:boxborderw=22:x=(w-text_w)/2:${EN_ANIM}:enable='between(t,0.55,${HOOK_END})',"
 fi
-# Пункты ответа: красная метка с цифрой и текст, появляются в 6, 9 и 12 секунд, держатся до заставки.
+# Пункты ответа по одному. Сначала пульсирует красная метка с цифрой (зритель понимает, что идёт ответ),
+# через 0,7 с появляется текст. Пункты идут в 5,0 / 8,6 / 12,2 секунд, последний держится до заставки.
 if [[ ${N_ANS:-0} -gt 0 ]]; then
   for ((k=1; k<=N_ANS; k++)); do
-    T0=$(awk -v k="$k" 'BEGIN{printf "%.2f", 6+3*(k-1)}')
-    yv="ANS_Y$k"; hv="ANS_H$k"; Y=${!yv}; H=${!hv}
-    AA="alpha='min(1\,max(0\,(t-${T0})/0.35))'"
-    EW="enable='between(t,${T0},15.6)'"
-    SL="x=${ANS_TX:-200}+80*pow(max(0\,1-(t-${T0})/0.45)\,2)"
-    FILTER+="drawtext=fontfile=${FONT_BOLD}:fontcolor=white:textfile=${WORK}/ans${k}.txt:fontsize=60:line_spacing=12:box=1:boxcolor=black@0.55:boxborderw=24:${SL}:y=${Y}:${AA}:${EW},"
-    FILTER+="drawtext=fontfile=${FONT_BOLD}:fontcolor=0xC62828:text='●':fontsize=130:x=${ANS_BX:-60}:y=${Y}+${H}/2-text_h/2+${ANS_DOT_DY:-0}:${AA}:${EW},"
-    FILTER+="drawtext=fontfile=${FONT_BOLD}:fontcolor=white:text='${k}':fontsize=64:x=${ANS_BX:-60}+(${ANS_GW:-100}-text_w)/2:y=${Y}+${H}/2-text_h/2+${ANS_NUM_DY:-0}:${AA}:${EW},"
+    S=$(awk -v k="$k" 'BEGIN{printf "%.2f", 5+3.6*(k-1)}')
+    TS=$(awk -v s="$S" 'BEGIN{printf "%.2f", s+0.7}')
+    if [[ $k -lt $N_ANS ]]; then TE=$(awk -v s="$S" 'BEGIN{printf "%.2f", s+3.4}'); else TE=15.6; fi
+    bv="BADGE_Y$k"; BY=${!bv}
+    BA="alpha='min(1\,max(0\,(t-${S})/0.25))*min(1\,max(0\,(${TE}-t)/0.2))'"
+    TA="alpha='min(1\,max(0\,(t-${TS})/0.35))*min(1\,max(0\,(${TE}-t)/0.2))'"
+    BE="enable='between(t,${S},${TE})'"
+    TE_EN="enable='between(t,${TS},${TE})'"
+    # метка слегка пульсирует, пока текста ещё нет
+    FS="fontsize='180+if(lt(t\,${TS})\,20*sin(2*PI*2.5*(t-${S}))\,0)'"
+    FILTER+="drawtext=fontfile=${FONT_BOLD}:fontcolor=0xC62828:text='●':${FS}:x=(w-text_w)/2:y=${BY}-text_h/2+${ANS_DOT_DY:-0}:${BA}:${BE},"
+    FILTER+="drawtext=fontfile=${FONT_BOLD}:fontcolor=white:text='${k}':fontsize=88:x=(w-text_w)/2:y=${BY}-text_h/2+${ANS_NUM_DY:-0}:${BA}:${BE},"
+    FILTER+="drawtext=${T}:textfile=${WORK}/ans${k}.txt:fontsize=76:line_spacing=14:box=1:boxcolor=black@0.55:boxborderw=36:x=(w-text_w)/2:y=(h-text_h)/2-60+60*pow(max(0\,1-(t-${TS})/0.45)\,2):${TA}:${TE_EN},"
   done
 fi
 FILTER+="drawbox=x=0:y=0:w=iw:h=ih:color=0x8B1A1A@1.0:t=fill:${E},"
