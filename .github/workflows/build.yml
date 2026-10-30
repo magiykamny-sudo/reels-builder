@@ -52,7 +52,7 @@ jobs:
       ANSWER: ${{ inputs.answer }}
       ANSWER_EN: ${{ inputs.answer_en }}
       TAG: ${{ inputs.tag }}
-      DRY_RUN: 'true'  # TEMP-TEST
+      DRY_RUN: ${{ inputs.dry_run }}
       MAKE_WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
       GH_TOKEN: ${{ github.token }}
     steps:
