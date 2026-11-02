@@ -42,7 +42,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       IMAGE_URL: ${{ inputs.image_url }}
       HOOK: ${{ inputs.hook }}
